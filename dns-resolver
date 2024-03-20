@@ -1,0 +1,49 @@
+#!/bin/sh /etc/rc.common
+
+START=60
+STOP=10
+
+LOG_FILE="/var/log/dns-resolver.log"
+
+log() {
+    echo "$(date +'%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
+}
+
+start() {
+    log "Starting DNS resolver..."
+
+    # Check if https-dns-proxy is running
+    if /etc/init.d/https-dns-proxy status | grep -q "running"; then
+        log "https-dns-proxy is already running."
+    else
+        log "https-dns-proxy is not running. Attempting to start it..."
+        /etc/init.d/https-dns-proxy start
+        sleep 5  # Wait for https-dns-proxy to start
+
+        # Check if https-dns-proxy is now running
+        if /etc/init.d/https-dns-proxy status | grep -q "running"; then
+            log "https-dns-proxy started successfully."
+        else
+            log "Failed to start https-dns-proxy. DNS resolution may not work correctly."
+        fi
+    fi
+
+    # Start dnsmasq
+    log "Starting dnsmasq..."
+    /etc/init.d/dnsmasq start
+
+    # Check if DNS resolution is working
+    log "Checking DNS resolution..."
+    if dig @127.0.0.1 -p 5053 google.com | grep -q "NOERROR"; then
+        log "DNS resolution is working correctly."
+    else
+        log "DNS resolution check failed. Please check the logs for more information."
+        log "Dig output:"
+        dig @127.0.0.1 -p 5053 google.com >> "$LOG_FILE" 2>&1
+    fi
+}
+
+stop() {
+    log "Stopping DNS resolver..."
+    /etc/init.d/dnsmasq stop
+}
